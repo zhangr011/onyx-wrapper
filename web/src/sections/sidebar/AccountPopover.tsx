@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { LOGOUT_DISABLED } from "@/lib/constants";
 import { Notification } from "@/interfaces/settings";
 import useSWR, { preload } from "swr";
@@ -29,11 +29,13 @@ import UserAvatar from "@/refresh-components/avatars/UserAvatar";
 interface SettingsPopoverProps {
   onUserSettingsClick: () => void;
   onOpenNotifications: () => void;
+  extraMenuItems?: ReactNode;
 }
 
 function SettingsPopover({
   onUserSettingsClick,
   onOpenNotifications,
+  extraMenuItems,
 }: SettingsPopoverProps) {
   const { user } = useUser();
   const { data: notifications } = useSWR<Notification[]>(
@@ -115,6 +117,7 @@ function SettingsPopover({
             Help & FAQ
           </LineItem>,
           null,
+          extraMenuItems,
           showLogin && (
             <LineItem key="log-in" icon={SvgUser} onClick={handleLogin}>
               Log in
@@ -139,11 +142,13 @@ function SettingsPopover({
 export interface SettingsProps {
   folded?: boolean;
   onShowBuildIntro?: () => void;
+  extraMenuItems?: ReactNode;
 }
 
 export default function AccountPopover({
   folded,
   onShowBuildIntro,
+  extraMenuItems,
 }: SettingsProps) {
   const [popupState, setPopupState] = useState<
     "Settings" | "Notifications" | undefined
@@ -216,6 +221,7 @@ export default function AccountPopover({
               setPopupState(undefined);
             }}
             onOpenNotifications={() => setPopupState("Notifications")}
+            extraMenuItems={extraMenuItems}
           />
         )}
         {popupState === "Notifications" && (

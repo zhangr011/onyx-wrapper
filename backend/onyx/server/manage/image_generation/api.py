@@ -13,6 +13,8 @@ from onyx.db.image_generation import get_image_generation_config
 from onyx.db.image_generation import set_default_image_generation_config
 from onyx.db.image_generation import unset_default_image_generation_config
 from onyx.db.llm import remove_llm_provider__no_commit
+from onyx.db.llm import update_group_llm_provider_relationships__no_commit
+from onyx.db.llm import update_llm_provider_persona_relationships__no_commit
 from onyx.db.models import LLMProvider as LLMProviderModel
 from onyx.db.models import ModelConfiguration
 from onyx.db.models import User
@@ -63,6 +65,9 @@ def _build_llm_provider_request(
     api_version: str | None,
     deployment_name: str | None,
     custom_config: dict[str, str] | None,
+    is_public: bool = True,
+    groups: list[int] | None = None,
+    personas: list[int] | None = None,
 ) -> LLMProviderUpsertRequest:
     """Build LLM provider request for image generation config.
 
@@ -99,8 +104,9 @@ def _build_llm_provider_request(
             api_base=api_base,  # From request
             api_version=api_version,  # From request
             deployment_name=deployment_name,  # From request
-            is_public=True,
-            groups=[],
+            is_public=is_public,
+            groups=groups if groups is not None else [],
+            personas=personas if personas is not None else [],
             model_configurations=[
                 ModelConfigurationUpsertRequest(
                     name=model_name,
@@ -137,8 +143,9 @@ def _build_llm_provider_request(
         api_base=api_base,
         api_version=api_version,
         deployment_name=deployment_name,
-        is_public=True,
-        groups=[],
+        is_public=is_public,
+        groups=groups if groups is not None else [],
+        personas=personas if personas is not None else [],
         model_configurations=[
             ModelConfigurationUpsertRequest(
                 name=model_name,
@@ -173,6 +180,38 @@ def _create_image_gen_llm_provider__no_commit(
     )
     db_session.add(new_provider)
     db_session.flush()  # Get the ID
+
+    # Create model configuration
+    max_input_tokens = get_max_input_tokens(
+        model_name=model_name,
+        model_provider=provider_request.provider,
+    )
+
+    model_config = ModelConfiguration(
+        llm_provider_id=new_provider.id,
+        name=model_name,
+        is_visible=True,
+        max_input_tokens=max_input_tokens,
+    )
+    db_session.add(model_config)
+    db_session.flush()
+
+    # Update group and persona relationships if provided
+    if provider_request.groups:
+        update_group_llm_provider_relationships__no_commit(
+            db_session=db_session,
+            llm_provider_id=new_provider.id,
+            group_ids=provider_request.groups,
+        )
+
+    if provider_request.personas:
+        update_llm_provider_persona_relationships__no_commit(
+            db_session=db_session,
+            llm_provider_id=new_provider.id,
+            persona_ids=provider_request.personas,
+        )
+
+    return model_config.id
 
     # Create model configuration
     max_input_tokens = get_max_input_tokens(
@@ -328,6 +367,9 @@ def create_config(
             api_version=config_create.api_version,
             deployment_name=config_create.deployment_name,
             custom_config=config_create.custom_config,
+            is_public=config_create.is_public,
+            groups=config_create.groups,
+            personas=config_create.personas,
         )
 
         model_configuration_id = _create_image_gen_llm_provider__no_commit(
@@ -455,6 +497,9 @@ def update_config(
             api_version=config_update.api_version,
             deployment_name=config_update.deployment_name,
             custom_config=config_update.custom_config,
+            is_public=config_update.is_public,
+            groups=config_update.groups,
+            personas=config_update.personas,
         )
 
         new_model_config_id = _create_image_gen_llm_provider__no_commit(

@@ -1,0 +1,58 @@
+# Local development override with different ports to avoid conflicts
+services:
+  api_server:
+    ports:
+      - "8086:8080"
+    environment:
+      - VESPA_HOST=index
+      - OPENSEARCH_HOST=opensearch
+      - REDIS_HOST=cache
+      - POSTGRES_HOST=relational_db
+      - MODEL_SERVER_HOST=inference_model_server
+
+  relational_db:
+    ports:
+      - "5433:5432"
+
+  index:
+    ports:
+      - "19072:19071"
+      - "8083:8081"
+
+  opensearch:
+    ports:
+      - "9201:9200"
+    ulimits: !reset null
+    environment:
+      - bootstrap.memory_lock=false
+
+  inference_model_server:
+    ports:
+      - "9001:9000"
+
+  indexing_model_server:
+    ports:
+      - "9002:9000"
+
+  cache:
+    ports:
+      - "6380:6379"
+
+  minio:
+    ports:
+      - "9006:9000"
+      - "9007:9001"
+
+  code-interpreter:
+    ports:
+      - "8001:8000"
+
+  web_server:
+    ports:
+      - "3007:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3005
+
+  nginx:
+    environment:
+      - HOST_PORT_80=8088

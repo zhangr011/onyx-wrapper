@@ -1,0 +1,45 @@
+# =============================================================================
+# Keycloak Service for Onyx OIDC Authentication - Using Existing Database
+# =============================================================================
+# This configuration uses the existing keycloak_postgres container to restore
+# the old Keycloak data while upgrading to Keycloak 26.1
+#
+# Keycloak will be available at http://<host>:8082
+# Admin console: http://<host>:8082/admin
+# =============================================================================
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    command: start-dev
+    restart: unless-stopped
+    external_links:
+      - keycloak_postgres:keycloak-postgres
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak123
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-localhost}
+      KC_HTTP_PORT: 8082
+      # Health check
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT:-8082}:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8082;echo -e \"GET /health/ready HTTP/1.1\r\nhost: localhost\r\nConnection: close\r\n\r\n\" >&3;if [ $? -eq 0 ];then echo 'Healthcheck Successful';exit 0;else exit 1;fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - onyx_default
+
+# Use the existing Keycloak PostgreSQL container
+networks:
+  onyx_default:
+    external: true

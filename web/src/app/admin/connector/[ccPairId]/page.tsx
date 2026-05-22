@@ -23,6 +23,10 @@ import {
   buildConfigEntries,
   ConfigDisplay,
 } from "./ConfigDisplay";
+// LOCAL PATCH: imports for inline connector config editing (Edit button on detail page)
+import DynamicConnectionForm from "@/app/admin/connectors/[connector]/pages/DynamicConnectorCreationForm";
+import { connectorConfigs } from "@/lib/connectors/connectors";
+import { Formik, Form } from "formik";
 import DeletionErrorStatus from "./DeletionErrorStatus";
 import { IndexAttemptsTable } from "./IndexAttemptsTable";
 import InlineFileManagement from "./InlineFileManagement";
@@ -152,6 +156,8 @@ function Main({ ccPairId }: { ccPairId: number }) {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [showDeleteConnectorConfirmModal, setShowDeleteConnectorConfirmModal] =
     useState(false);
+  const [editingConnectorConfig, setEditingConnectorConfig] = useState(false);
+  const [isSavingConnectorConfig, setIsSavingConnectorConfig] = useState(false);
   const isSchedulingConnectorDeletionRef = useRef(false);
 
   const refresh = useCallback(() => {
@@ -672,26 +678,134 @@ function Main({ ccPairId }: { ccPairId: number }) {
       {ccPair.connector.connector_specific_config &&
         Object.keys(ccPair.connector.connector_specific_config).length > 0 && (
           <>
-            <Title size="md" className="mt-10 mb-2">
-              Connector Configuration
-            </Title>
+            <div className="flex items-center justify-between mt-10 mb-2">
+              <Title size="md">Connector Configuration</Title>
+              {ccPair.is_editable_for_current_user &&
+                connectorConfigs[
+                  ccPair.connector.source as keyof typeof connectorConfigs
+                ] &&
+                !editingConnectorConfig && (
+                  <Button
+                    prominence="tertiary"
+                    icon={SvgSettings}
+                    onClick={() => setEditingConnectorConfig(true)}
+                  >
+                    Edit
+                  </Button>
+                )}
+            </div>
 
             <Card className="px-8 py-4">
-              <ConfigDisplay
-                configEntries={buildConfigEntries(
-                  ccPair.connector.connector_specific_config,
-                  ccPair.connector.source
-                )}
-              />
-
-              {/* Inline file management for file connectors */}
-              {canManageInlineFileConnectorFiles && (
-                <div className="mt-6">
-                  <InlineFileManagement
-                    connectorId={ccPair.connector.id}
-                    onRefresh={refresh}
+              {editingConnectorConfig ? (
+                (() => {
+                  const config =
+                    connectorConfigs[
+                      ccPair.connector.source as keyof typeof connectorConfigs
+                    ];
+                  const initialValues = {
+                    name: ccPair.name,
+                    groups: [] as number[],
+                    access_type: ccPair.access_type ?? "public",
+                    ...ccPair.connector.connector_specific_config,
+                  };
+                  return (
+                    <Formik
+                      initialValues={initialValues}
+                      onSubmit={async (values) => {
+                        setIsSavingConnectorConfig(true);
+                        try {
+                          const {
+                            name,
+                            groups,
+                            access_type,
+                            ...connectorSpecificConfig
+                          } = values;
+                          const response = await fetch(
+                            `/api/admin/connector/${ccPair.connector.id}`,
+                            {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                name: ccPair.connector.name,
+                                source: ccPair.connector.source,
+                                input_type: ccPair.connector.input_type,
+                                connector_specific_config:
+                                  connectorSpecificConfig,
+                                refresh_freq: ccPair.connector.refresh_freq,
+                                prune_freq: ccPair.connector.prune_freq,
+                                indexing_start: ccPair.connector.indexing_start,
+                                access_type: access_type,
+                                groups: groups,
+                              }),
+                            }
+                          );
+                          if (response.ok) {
+                            toast.success("Connector configuration updated");
+                            setEditingConnectorConfig(false);
+                            refresh();
+                          } else {
+                            const err = await response.json();
+                            toast.error(
+                              err.detail || "Failed to update configuration"
+                            );
+                          }
+                        } finally {
+                          setIsSavingConnectorConfig(false);
+                        }
+                      }}
+                    >
+                      {({ values }) => (
+                        <Form>
+                          <DynamicConnectionForm
+                            config={config}
+                            values={values}
+                            connector={
+                              ccPair.connector
+                                .source as import("@/lib/types").ConfigurableSources
+                            }
+                            currentCredential={ccPair.credential}
+                          />
+                          <div className="flex gap-2 mt-4">
+                            <Button
+                              type="submit"
+                              prominence="primary"
+                              disabled={isSavingConnectorConfig}
+                            >
+                              {isSavingConnectorConfig ? "Saving..." : "Save"}
+                            </Button>
+                            <Button
+                              prominence="tertiary"
+                              onClick={() => setEditingConnectorConfig(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </Form>
+                      )}
+                    </Formik>
+                  );
+                })()
+              ) : (
+                <>
+                  <ConfigDisplay
+                    configEntries={buildConfigEntries(
+                      ccPair.connector.connector_specific_config,
+                      ccPair.connector.source
+                    )}
                   />
-                </div>
+
+                  {/* Inline file management for file connectors */}
+                  {canManageInlineFileConnectorFiles && (
+                    <div className="mt-6">
+                      <InlineFileManagement
+                        connectorId={ccPair.connector.id}
+                        onRefresh={refresh}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </Card>
           </>

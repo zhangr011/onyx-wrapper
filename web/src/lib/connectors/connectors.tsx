@@ -320,6 +320,16 @@ export const connectorConfigs: Record<
         description: "Index issues from repositories",
         default: true,
       },
+      // LOCAL PATCH: add include_code_files checkbox (not in upstream)
+      {
+        type: "checkbox",
+        query: "Include code files?",
+        label: "Include Code Files",
+        name: "include_code_files",
+        description:
+          "Index source code and markdown files from the repository",
+        default: false,
+      },
     ],
   },
   bitbucket: {
@@ -1928,6 +1938,7 @@ export interface GitlabConfig {
   project_name: string;
   include_mrs: boolean;
   include_issues: boolean;
+  include_code_files: boolean; // LOCAL PATCH: added field to match checkbox above
 }
 
 export interface BitbucketConfig {

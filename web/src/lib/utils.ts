@@ -7,6 +7,12 @@ import {
   SvgFileText,
 } from "@opal/icons";
 import { ALLOWED_URL_PROTOCOLS } from "./constants";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 const URI_SCHEME_REGEX = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
 const BARE_EMAIL_REGEX = /^[^\s@/]+@[^\s@/:]+\.[^\s@/:]+$/;

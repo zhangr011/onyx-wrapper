@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { LOGOUT_DISABLED } from "@/lib/constants";
-import { Notification } from "@/interfaces/settings";
+import type { Notification } from "@/lib/notifications/interfaces";
 import useSWR, { preload } from "swr";
 import { errorHandlingFetcher } from "@/lib/fetcher";
 import { SWR_KEYS } from "@/lib/swr-keys";

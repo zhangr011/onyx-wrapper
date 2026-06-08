@@ -54,6 +54,12 @@ export const ADMIN_ROUTES = {
     title: "Existing Connectors",
     sidebarLabel: "Existing Connectors",
   },
+  INDEX_MIGRATION: {
+    path: "/admin/document-index-migration",
+    icon: SvgBookOpen,
+    title: "Document Index Migration",
+    sidebarLabel: "Document Index Migration",
+  },
   ADD_CONNECTOR: {
     path: "/admin/add-connector",
     icon: SvgUploadCloud,

@@ -202,7 +202,6 @@ export default function AgentCard({ agent }: AgentCardProps) {
                 title={agent.owner?.email || "Onyx"}
                 sizePreset="secondary"
                 variant="body"
-                prominence="muted"
               />
               <Content
                 icon={SvgActions}
@@ -215,14 +214,12 @@ export default function AgentCard({ agent }: AgentCardProps) {
                 }
                 sizePreset="secondary"
                 variant="body"
-                prominence="muted"
               />
             </div>
 
             {/* Right side - Start Chat button */}
             <div className="p-0.5">
               <Button
-                prominence="tertiary"
                 rightIcon={SvgBubbleText}
                 onClick={noProp(handleStartChat)}
               >

@@ -87,3 +87,61 @@ export const MODEL_ID_MAP: Record<string, string> = {
 export function resolveModelId(cardId: string): string {
   return MODEL_ID_MAP[cardId] ?? cardId;
 }
+
+/** Returns the icon component for a provider type. */
+export function getProviderIcon(providerType: string): React.FunctionComponent<IconProps> {
+  return getVoiceProviderDetail(providerType).icon;
+}
+
+/** Returns the display label for a provider type. */
+export function getProviderLabel(providerType: string): string {
+  return getVoiceProviderDetail(providerType).label;
+}
+
+/** Provider labels keyed by provider type. */
+export const PROVIDER_LABELS: Record<string, string> = {
+  openai: "OpenAI",
+  azure: "Azure Speech Services",
+  elevenlabs: "ElevenLabs",
+};
+
+/** Provider API key URLs. */
+export const PROVIDER_API_KEY_URLS: Record<string, string> = {
+  openai: "https://platform.openai.com/api-keys",
+  azure: "https://portal.azure.com/",
+  elevenlabs: "https://elevenlabs.io/app/settings/api-keys",
+};
+
+/** Provider documentation URLs. */
+export const PROVIDER_DOCS_URLS: Record<string, string> = {
+  openai: "https://platform.openai.com/docs/guides/text-to-speech",
+  azure: "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/",
+  elevenlabs: "https://elevenlabs.io/docs",
+};
+
+/** Provider voice/language documentation URLs. */
+export const PROVIDER_VOICE_DOCS_URLS: Record<string, { url: string; label: string }> = {
+  openai: {
+    url: "https://platform.openai.com/docs/guides/text-to-speech#voice-options",
+    label: "OpenAI",
+  },
+  azure: {
+    url: "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts",
+    label: "Azure",
+  },
+  elevenlabs: {
+    url: "https://elevenlabs.io/docs/voices/premade-voices",
+    label: "ElevenLabs",
+  },
+};
+
+/** OpenAI STT models. */
+export const OPENAI_STT_MODELS = [
+  { id: "whisper-1", name: "Whisper v1" },
+];
+
+/** OpenAI TTS models. */
+export const OPENAI_TTS_MODELS = [
+  { id: "tts-1", name: "TTS-1" },
+  { id: "tts-1-hd", name: "TTS-1 HD" },
+];

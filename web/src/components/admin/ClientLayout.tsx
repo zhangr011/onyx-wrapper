@@ -87,11 +87,7 @@ export function ClientLayout({ children, enableCloud }: ClientLayoutProps) {
         <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">{children}</div>
       ) : (
         <>
-          <AdminSidebar
-            enableCloudSS={enableCloud}
-            folded={sidebarFolded}
-            onFoldChange={setSidebarFolded}
-          />
+          <AdminSidebar />
           <div
             data-main-container
             className={cn(

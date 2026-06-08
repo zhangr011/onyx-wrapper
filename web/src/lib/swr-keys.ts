@@ -208,6 +208,10 @@ export const SWR_KEYS = {
   ccPairIndexingErrors: (ccPairId: number) =>
     `/api/manage/admin/cc-pair/${ccPairId}/errors`,
 
+  // ── Document Index Migration ─────────────────────────────────────────────
+  opensearchMigrationStatus: "/api/manage/admin/document-index-migration/status",
+  opensearchMigrationRetrieval: "/api/manage/admin/document-index-migration/retrieval-source",
+
   // ── Scheduled Tasks (Craft) ───────────────────────────────────────────────
   // `scheduledTaskRuns` is a base URL — the run-history table appends
   // `?limit=…` / `?cursor=…` for pagination. Invalidate from elsewhere with
@@ -218,4 +222,5 @@ export const SWR_KEYS = {
     `/api/build/scheduled-tasks/${taskId}/runs`,
   scheduledRunContext: (sessionId: string) =>
     `/api/build/sessions/${sessionId}/scheduled-run-context`,
+  buildConnectors: "/api/build/connectors",
 } as const;

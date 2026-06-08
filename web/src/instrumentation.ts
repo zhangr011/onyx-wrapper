@@ -1,13 +1,8 @@
-import * as Sentry from "@sentry/nextjs";
-
+// Disabled for local build to avoid Turbopack standalone issues
 export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    await import("../sentry.server.config");
-  }
-
-  if (process.env.NEXT_RUNTIME === "edge") {
-    await import("../sentry.edge.config");
-  }
+  // No-op
 }
 
-export const onRequestError = Sentry.captureRequestError;
+export const onRequestError = (error: unknown) => {
+  console.error("Request error:", error);
+};

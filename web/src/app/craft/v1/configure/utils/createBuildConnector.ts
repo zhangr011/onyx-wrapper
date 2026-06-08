@@ -75,7 +75,7 @@ export async function createBuildConnector({
       "private",
       [],
       undefined,
-      "FILE_SYSTEM"
+      "REGULAR"
     );
 
     if (!linkResponse.ok) {

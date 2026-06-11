@@ -145,6 +145,7 @@ class ImageGenerationCredentials(BaseModel):
     api_base: str | None
     api_version: str | None
     deployment_name: str | None
+    custom_config: dict[str, str] | None = None
 
     @classmethod
     def from_model(
@@ -155,6 +156,15 @@ class ImageGenerationCredentials(BaseModel):
         Note: API key is masked for security - only first 4 and last 4 chars shown.
         """
         llm_provider = config.model_configuration.llm_provider
+
+        # Build custom_config, masking sensitive fields
+        custom_config = None
+        if llm_provider.custom_config:
+            custom_config = dict(llm_provider.custom_config)
+            # Mask api_key inside custom_config if present
+            if "api_key" in custom_config:
+                custom_config["api_key"] = _mask_api_key(custom_config["api_key"])
+
         return cls(
             api_key=_mask_api_key(
                 llm_provider.api_key.get_value(apply_mask=False)
@@ -164,6 +174,7 @@ class ImageGenerationCredentials(BaseModel):
             api_base=llm_provider.api_base,
             api_version=llm_provider.api_version,
             deployment_name=llm_provider.deployment_name,
+            custom_config=custom_config,
         )
 
 

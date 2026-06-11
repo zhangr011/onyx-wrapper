@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import base64
 import json
+import urllib.request
 from datetime import datetime
 from typing import Any
 from typing import TYPE_CHECKING
+from typing import Union
 
 from pydantic import BaseModel
 
@@ -14,13 +16,24 @@ from onyx.image_gen.interfaces import ImageGenerationProviderCredentials
 from onyx.image_gen.interfaces import ReferenceImage
 from onyx.tracing.flows import LLMFlow
 from onyx.tracing.llm_utils import traced_llm_call
+from onyx.utils.logger import setup_logger
 
 if TYPE_CHECKING:
     from onyx.image_gen.interfaces import ImageGenerationResponse
 
+logger = setup_logger()
+
 
 class VertexCredentials(BaseModel):
+    """Service account JSON credentials for Vertex AI."""
     vertex_credentials: str
+    vertex_location: str
+    project_id: str
+
+
+class VertexApiKeyCredentials(BaseModel):
+    """API key credentials for Vertex AI Agent Platform."""
+    api_key: str
     vertex_location: str
     project_id: str
 
@@ -28,11 +41,23 @@ class VertexCredentials(BaseModel):
 class VertexImageGenerationProvider(ImageGenerationProvider):
     def __init__(
         self,
-        vertex_credentials: VertexCredentials,
+        vertex_credentials: VertexCredentials | None = None,
+        api_key_credentials: VertexApiKeyCredentials | None = None,
     ):
-        self._vertex_credentials = vertex_credentials.vertex_credentials
-        self._vertex_location = vertex_credentials.vertex_location
-        self._vertex_project = vertex_credentials.project_id
+        if api_key_credentials:
+            self._auth_mode = "api_key"
+            self._api_key = api_key_credentials.api_key
+            self._vertex_credentials = None
+            self._vertex_location = api_key_credentials.vertex_location
+            self._vertex_project = api_key_credentials.project_id
+        elif vertex_credentials:
+            self._auth_mode = "service_account"
+            self._api_key = None
+            self._vertex_credentials = vertex_credentials.vertex_credentials
+            self._vertex_location = vertex_credentials.vertex_location
+            self._vertex_project = vertex_credentials.project_id
+        else:
+            raise ValueError("Either vertex_credentials or api_key_credentials must be provided")
 
     @classmethod
     def validate_credentials(
@@ -50,15 +75,16 @@ class VertexImageGenerationProvider(ImageGenerationProvider):
         cls,
         credentials: ImageGenerationProviderCredentials,
     ) -> VertexImageGenerationProvider:
-        vertex_credentials = _parse_to_vertex_credentials(credentials)
+        parsed = _parse_to_vertex_credentials(credentials)
 
-        return cls(
-            vertex_credentials=vertex_credentials,
-        )
+        if isinstance(parsed, VertexApiKeyCredentials):
+            return cls(api_key_credentials=parsed)
+        return cls(vertex_credentials=parsed)
 
     @property
     def supports_reference_images(self) -> bool:
-        return True
+        # Reference images only supported with service account auth
+        return self._auth_mode == "service_account"
 
     @property
     def max_reference_images(self) -> int:
@@ -76,6 +102,11 @@ class VertexImageGenerationProvider(ImageGenerationProvider):
         **kwargs: Any,
     ) -> ImageGenerationResponse:
         if reference_images:
+            if self._auth_mode != "service_account":
+                raise ValueError(
+                    "Reference image editing requires service account credentials. "
+                    "API key auth only supports text-to-image generation."
+                )
             return self._generate_image_with_reference_images(
                 prompt=prompt,
                 model=model,
@@ -84,6 +115,15 @@ class VertexImageGenerationProvider(ImageGenerationProvider):
                 reference_images=reference_images,
             )
 
+        if self._auth_mode == "api_key":
+            return self._generate_image_via_rest_api(
+                prompt=prompt,
+                model=model,
+                size=size,
+                n=n,
+            )
+
+        # Service account path: use LiteLLM
         from litellm import image_generation
 
         with traced_llm_call(
@@ -103,6 +143,82 @@ class VertexImageGenerationProvider(ImageGenerationProvider):
                 vertex_project=self._vertex_project,
                 **kwargs,
             )
+
+    def _generate_image_via_rest_api(
+        self,
+        prompt: str,
+        model: str,
+        size: str,
+        n: int,
+    ) -> ImageGenerationResponse:
+        """Generate image using Vertex AI REST API with API key auth.
+
+        Used when an API key (instead of service account JSON) is provided.
+        Calls the Vertex AI generateContent endpoint directly with ?key= parameter.
+        """
+        from litellm.types.utils import ImageObject
+        from litellm.types.utils import ImageResponse
+
+        model_name = model.replace("vertex_ai/", "")
+        url = (
+            f"https://{self._vertex_location}-aiplatform.googleapis.com/v1"
+            f"/projects/{self._vertex_project}"
+            f"/locations/{self._vertex_location}"
+            f"/publishers/google/models/{model_name}"
+            f":generateContent?key={self._api_key}"
+        )
+
+        payload = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"],
+            },
+        }).encode()
+
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+        with traced_llm_call(
+            flow=LLMFlow.IMAGE_GENERATION,
+            model=model_name,
+            provider="vertex_ai",
+            input_messages=[{"role": "user", "content": prompt}],
+        ):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    data = json.loads(resp.read().decode())
+            except urllib.error.HTTPError as e:
+                error_body = e.read().decode()[:500]
+                logger.warning(
+                    "Vertex AI REST API error: %s %s", e.code, error_body
+                )
+                raise RuntimeError(
+                    f"Vertex AI REST API error: {e.code}"
+                ) from e
+
+        generated_data: list[ImageObject] = []
+        for candidate in data.get("candidates", []):
+            for part in candidate.get("content", {}).get("parts", []):
+                inline_data = part.get("inlineData")
+                if not inline_data or not inline_data.get("data"):
+                    continue
+                generated_data.append(
+                    ImageObject(
+                        b64_json=inline_data["data"],
+                        revised_prompt=prompt,
+                    )
+                )
+
+        if not generated_data:
+            raise RuntimeError("No image data returned from Vertex AI REST API.")
+
+        return ImageResponse(
+            created=int(datetime.now().timestamp()),
+            data=generated_data,
+        )
 
     def _generate_image_with_reference_images(
         self,
@@ -206,29 +322,43 @@ def _map_size_to_aspect_ratio(size: str) -> str:
 
 def _parse_to_vertex_credentials(
     credentials: ImageGenerationProviderCredentials,
-) -> VertexCredentials:
+) -> VertexCredentials | VertexApiKeyCredentials:
     custom_config = credentials.custom_config
 
     if not custom_config:
         raise ImageProviderCredentialsError("Custom config is required")
 
-    vertex_credentials = custom_config.get("vertex_credentials")
     vertex_location = custom_config.get("vertex_location")
-
-    if not vertex_credentials:
-        raise ImageProviderCredentialsError("Vertex credentials are required")
-
     if not vertex_location:
         raise ImageProviderCredentialsError("Vertex location is required")
 
-    vertex_json = json.loads(vertex_credentials)
-    vertex_project = vertex_json.get("project_id")
+    # API key auth mode: api_key + vertex_project provided
+    api_key = custom_config.get("api_key")
+    vertex_project = custom_config.get("vertex_project")
 
-    if not vertex_project:
-        raise ImageProviderCredentialsError("Project ID is required")
+    if api_key and vertex_project:
+        return VertexApiKeyCredentials(
+            api_key=api_key,
+            vertex_location=vertex_location,
+            project_id=vertex_project,
+        )
 
-    return VertexCredentials(
-        vertex_credentials=vertex_credentials,
-        vertex_location=vertex_location,
-        project_id=vertex_project,
+    # Service account auth mode: vertex_credentials JSON provided
+    vertex_credentials = custom_config.get("vertex_credentials")
+    if vertex_credentials:
+        vertex_json = json.loads(vertex_credentials)
+        project_id = vertex_json.get("project_id")
+
+        if not project_id:
+            raise ImageProviderCredentialsError("Project ID is required in service account JSON")
+
+        return VertexCredentials(
+            vertex_credentials=vertex_credentials,
+            vertex_location=vertex_location,
+            project_id=project_id,
+        )
+
+    raise ImageProviderCredentialsError(
+        "Either 'api_key' + 'vertex_project' (for API key auth) "
+        "or 'vertex_credentials' (for service account auth) must be provided"
     )

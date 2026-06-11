@@ -19,11 +19,16 @@ import { ModelAccessField } from "@/sections/modals/llmConfig/shared";
 const VERTEXAI_PROVIDER_NAME = "vertex_ai";
 const VERTEXAI_DEFAULT_LOCATION = "global";
 
+type AuthMode = "service_account" | "api_key";
+
 // Vertex form values
 interface VertexImageGenFormValues {
+  auth_mode: AuthMode;
   custom_config: {
     vertex_credentials: string;
     vertex_location: string;
+    api_key: string;
+    vertex_project: string;
   };
   is_public: boolean;
   groups: number[];
@@ -31,9 +36,12 @@ interface VertexImageGenFormValues {
 }
 
 const initialValues: VertexImageGenFormValues = {
+  auth_mode: "api_key",
   custom_config: {
     vertex_credentials: "",
     vertex_location: VERTEXAI_DEFAULT_LOCATION,
+    api_key: "",
+    vertex_project: "",
   },
   is_public: true,
   groups: [],
@@ -41,9 +49,21 @@ const initialValues: VertexImageGenFormValues = {
 };
 
 const validationSchema = Yup.object().shape({
+  auth_mode: Yup.string().oneOf(["service_account", "api_key"]).required(),
   custom_config: Yup.object().shape({
-    vertex_credentials: Yup.string().required("Credentials file is required"),
     vertex_location: Yup.string().required("Location is required"),
+    vertex_credentials: Yup.string().when("$authMode", {
+      is: "service_account",
+      then: (schema) => schema.required("Credentials file is required"),
+    }),
+    api_key: Yup.string().when("$authMode", {
+      is: "api_key",
+      then: (schema) => schema.required("API key is required"),
+    }),
+    vertex_project: Yup.string().when("$authMode", {
+      is: "api_key",
+      then: (schema) => schema.required("Project ID is required"),
+    }),
   }),
 });
 
@@ -51,14 +71,16 @@ function getInitialValuesFromCredentials(
   credentials: ImageGenerationCredentials,
   _imageProvider: ImageProvider
 ): Partial<VertexImageGenFormValues> {
+  const hasApiKey = !!credentials.custom_config?.api_key;
   return {
+    auth_mode: hasApiKey ? "api_key" : "service_account",
     custom_config: {
       vertex_credentials: credentials.custom_config?.vertex_credentials || "",
       vertex_location:
         credentials.custom_config?.vertex_location || VERTEXAI_DEFAULT_LOCATION,
+      api_key: credentials.custom_config?.api_key || "",
+      vertex_project: credentials.custom_config?.vertex_project || "",
     },
-    // Note: Access control fields are not returned by the credentials endpoint
-    // Use defaults when editing - user can adjust via ModelAccessField
     is_public: true,
     groups: [],
     personas: [],
@@ -69,14 +91,22 @@ function transformValues(
   values: VertexImageGenFormValues,
   imageProvider: ImageProvider
 ): ImageGenSubmitPayload {
+  const customConfig: Record<string, string> = {
+    vertex_location: values.custom_config.vertex_location,
+  };
+
+  if (values.auth_mode === "api_key") {
+    customConfig.api_key = values.custom_config.api_key;
+    customConfig.vertex_project = values.custom_config.vertex_project;
+  } else {
+    customConfig.vertex_credentials = values.custom_config.vertex_credentials;
+  }
+
   return {
     modelName: imageProvider.model_name,
     imageProviderId: imageProvider.image_provider_id,
     provider: VERTEXAI_PROVIDER_NAME,
-    customConfig: {
-      vertex_credentials: values.custom_config.vertex_credentials,
-      vertex_location: values.custom_config.vertex_location,
-    },
+    customConfig,
     isPublic: values.is_public,
     groups: values.groups,
     personas: values.personas,
@@ -86,62 +116,176 @@ function transformValues(
 function VertexFormFields(
   props: ImageGenFormChildProps<VertexImageGenFormValues>
 ) {
-  const { apiStatus, showApiMessage, errorMessage, disabled, imageProvider } =
+  const { values, setFieldValue, apiStatus, showApiMessage, errorMessage, disabled, imageProvider } =
     props;
+
+  const isApiKeyMode = values.auth_mode === "api_key";
 
   return (
     <>
-      {/* Credentials File field */}
-      <FormikField<string>
-        name="custom_config.vertex_credentials"
+      {/* Auth mode toggle */}
+      <FormikField<AuthMode>
+        name="auth_mode"
         render={(field, helper, meta, state) => (
           <FormField
-            name="custom_config.vertex_credentials"
-            state={apiStatus === "error" ? "error" : state}
+            name="auth_mode"
+            state={state}
             className="w-full"
           >
-            <FormField.Label>Credentials File</FormField.Label>
-            <FormField.Control>
-              <InputFile
-                setValue={(value) => helper.setValue(value)}
-                error={apiStatus === "error"}
-                onBlur={field.onBlur}
-                showClearButton={true}
+            <FormField.Label>Authentication Method</FormField.Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => helper.setValue("api_key")}
+                className={`px-3 py-1.5 rounded text-sm ${
+                  isApiKeyMode
+                    ? "bg-blue-600 text-white"
+                    : "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+                }`}
                 disabled={disabled}
-                accept="application/json"
-                placeholder="Upload or paste your credentials"
-              />
-            </FormField.Control>
-            {showApiMessage ? (
-              <FormField.APIMessage
-                state={apiStatus}
-                messages={{
-                  loading: `Testing credentials with ${imageProvider.title}...`,
-                  success: "Credentials valid. Configuration saved.",
-                  error: errorMessage || "Invalid credentials",
-                }}
-              />
-            ) : (
-              <FormField.Message
-                messages={{
-                  idle: (
-                    <>
-                      {"Upload or paste your "}
-                      <InlineExternalLink href="https://console.cloud.google.com/projectselector2/iam-admin/serviceaccounts?supportedpurview=project">
-                        service account credentials
-                      </InlineExternalLink>
-                      {" from Google Cloud."}
-                    </>
-                  ),
-                  error: meta.error,
-                }}
-              />
-            )}
+              >
+                API Key
+              </button>
+              <button
+                type="button"
+                onClick={() => helper.setValue("service_account")}
+                className={`px-3 py-1.5 rounded text-sm ${
+                  !isApiKeyMode
+                    ? "bg-blue-600 text-white"
+                    : "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+                }`}
+                disabled={disabled}
+              >
+                Service Account
+              </button>
+            </div>
+            <FormField.Message
+              messages={{
+                idle: isApiKeyMode
+                  ? "Use a Vertex AI Agent Platform API key."
+                  : "Use a Google Cloud service account JSON file.",
+                error: meta.error,
+              }}
+            />
           </FormField>
         )}
       />
 
-      {/* Location field */}
+      {isApiKeyMode ? (
+        <>
+          {/* API Key field */}
+          <FormikField<string>
+            name="custom_config.api_key"
+            render={(field, helper, meta, state) => (
+              <FormField
+                name="custom_config.api_key"
+                state={apiStatus === "error" ? "error" : state}
+                className="w-full"
+              >
+                <FormField.Label>API Key</FormField.Label>
+                <FormField.Control>
+                  <InputTypeIn
+                    value={field.value}
+                    onChange={(e) => helper.setValue(e.target.value)}
+                    onBlur={field.onBlur}
+                    placeholder="AQ.xxx..."
+                    showClearButton={true}
+                    variant={disabled ? "disabled" : undefined}
+                  />
+                </FormField.Control>
+                <FormField.Message
+                  messages={{
+                    idle: "Your Vertex AI API key from the Agent Platform.",
+                    error: meta.error,
+                  }}
+                />
+              </FormField>
+            )}
+          />
+
+          {/* Project ID field */}
+          <FormikField<string>
+            name="custom_config.vertex_project"
+            render={(field, helper, meta, state) => (
+              <FormField
+                name="custom_config.vertex_project"
+                state={state}
+                className="w-full"
+              >
+                <FormField.Label>Project ID</FormField.Label>
+                <FormField.Control>
+                  <InputTypeIn
+                    value={field.value}
+                    onChange={(e) => helper.setValue(e.target.value)}
+                    onBlur={field.onBlur}
+                    placeholder="my-gcp-project-123"
+                    showClearButton={true}
+                    variant={disabled ? "disabled" : undefined}
+                  />
+                </FormField.Control>
+                <FormField.Message
+                  messages={{
+                    idle: "Your Google Cloud project ID.",
+                    error: meta.error,
+                  }}
+                />
+              </FormField>
+            )}
+          />
+        </>
+      ) : (
+        /* Credentials File field (service account mode) */
+        <FormikField<string>
+          name="custom_config.vertex_credentials"
+          render={(field, helper, meta, state) => (
+            <FormField
+              name="custom_config.vertex_credentials"
+              state={apiStatus === "error" ? "error" : state}
+              className="w-full"
+            >
+              <FormField.Label>Credentials File</FormField.Label>
+              <FormField.Control>
+                <InputFile
+                  setValue={(value) => helper.setValue(value)}
+                  error={apiStatus === "error"}
+                  onBlur={field.onBlur}
+                  showClearButton={true}
+                  disabled={disabled}
+                  accept="application/json"
+                  placeholder="Upload or paste your credentials"
+                />
+              </FormField.Control>
+              {showApiMessage ? (
+                <FormField.APIMessage
+                  state={apiStatus}
+                  messages={{
+                    loading: `Testing credentials with ${imageProvider.title}...`,
+                    success: "Credentials valid. Configuration saved.",
+                    error: errorMessage || "Invalid credentials",
+                  }}
+                />
+              ) : (
+                <FormField.Message
+                  messages={{
+                    idle: (
+                      <>
+                        {"Upload or paste your "}
+                        <InlineExternalLink href="https://console.cloud.google.com/projectselector2/iam-admin/serviceaccounts?supportedpurview=project">
+                          service account credentials
+                        </InlineExternalLink>
+                        {" from Google Cloud."}
+                      </>
+                    ),
+                    error: meta.error,
+                  }}
+                />
+              )}
+            </FormField>
+          )}
+        />
+      )}
+
+      {/* Location field (shared) */}
       <FormikField<string>
         name="custom_config.vertex_location"
         render={(field, helper, meta, state) => (
@@ -156,7 +300,7 @@ function VertexFormFields(
                 value={field.value}
                 onChange={(e) => helper.setValue(e.target.value)}
                 onBlur={field.onBlur}
-                placeholder="global"
+                placeholder="us-central1"
                 showClearButton={false}
                 variant={disabled ? "disabled" : undefined}
               />

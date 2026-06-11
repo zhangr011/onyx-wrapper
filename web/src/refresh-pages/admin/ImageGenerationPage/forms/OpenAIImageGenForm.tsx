@@ -16,9 +16,10 @@ import { ImageGenerationCredentials } from "@/refresh-pages/admin/ImageGeneratio
 import { ImageProvider } from "@/refresh-pages/admin/ImageGenerationPage/constants";
 import { ModelAccessField } from "@/sections/modals/llmConfig/shared";
 
-// OpenAI form values - API key + access control
+// OpenAI form values - API key + optional base URL + access control
 interface OpenAIFormValues {
   api_key: string;
+  api_base: string;
   is_public: boolean;
   groups: number[];
   personas: number[];
@@ -26,6 +27,7 @@ interface OpenAIFormValues {
 
 const initialValues: OpenAIFormValues = {
   api_key: "",
+  api_base: "",
   is_public: true,
   groups: [],
   personas: [],
@@ -33,6 +35,7 @@ const initialValues: OpenAIFormValues = {
 
 const validationSchema = Yup.object().shape({
   api_key: Yup.string().required("API Key is required"),
+  api_base: Yup.string().optional(),
 });
 
 function OpenAIFormFields(props: ImageGenFormChildProps<OpenAIFormValues>) {
@@ -116,6 +119,33 @@ function OpenAIFormFields(props: ImageGenFormChildProps<OpenAIFormValues>) {
           </FormField>
         )}
       />
+      <FormikField<string>
+        name="api_base"
+        render={(field, helper, meta, state) => (
+          <FormField
+            name="api_base"
+            state={state}
+            className="w-full"
+          >
+            <FormField.Label>Custom Base URL</FormField.Label>
+            <FormField.Control>
+              <input
+                type="text"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                placeholder="https://api.openai.com/v1 (leave empty for default)"
+                {...field}
+                disabled={disabled}
+              />
+            </FormField.Control>
+            <FormField.Message
+              messages={{
+                idle: "Optional. Use a custom OpenAI-compatible endpoint.",
+                error: meta.error,
+              }}
+            />
+          </FormField>
+        )}
+      />
       <ModelAccessField />
     </>
   );
@@ -127,6 +157,7 @@ function getInitialValuesFromCredentials(
 ): Partial<OpenAIFormValues> {
   return {
     api_key: credentials.api_key || "",
+    api_base: credentials.api_base || "",
     // Note: Access control fields are not returned by the credentials endpoint
     // Use defaults when editing - user can adjust via ModelAccessField
     is_public: true,
@@ -144,6 +175,7 @@ function transformValues(
     imageProviderId: imageProvider.image_provider_id,
     provider: "openai",
     apiKey: values.api_key,
+    apiBase: values.api_base || undefined,
     isPublic: values.is_public,
     groups: values.groups,
     personas: values.personas,

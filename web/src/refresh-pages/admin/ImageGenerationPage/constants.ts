@@ -90,4 +90,25 @@ export const IMAGE_PROVIDER_GROUPS: ProviderGroup[] = [
       },
     ],
   },
+  {
+    name: "Company API (qcai)",
+    providers: [
+      {
+        image_provider_id: "qcai_gpt_image_2_1k",
+        model_name: "gpt-image-2-1k",
+        provider_name: "openai",
+        title: "GPT Image 2 1K (Company)",
+        description:
+          "GPT Image 2 1K via company API endpoint (qcai.qcplay.com). Requires custom base URL.",
+      },
+      {
+        image_provider_id: "qcai_gemini_3_pro_image_preview",
+        model_name: "gemini-3-pro-image-preview",
+        provider_name: "openai",
+        title: "Gemini 3 Pro Image Preview (Company)",
+        description:
+          "Gemini 3 Pro Image Preview via company API endpoint (qcai.qcplay.com). Requires custom base URL.",
+      },
+    ],
+  },
 ];

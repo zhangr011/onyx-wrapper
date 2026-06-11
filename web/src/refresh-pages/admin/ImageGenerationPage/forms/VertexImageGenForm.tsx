@@ -116,8 +116,14 @@ function transformValues(
 function VertexFormFields(
   props: ImageGenFormChildProps<VertexImageGenFormValues>
 ) {
-  const { values, setFieldValue, apiStatus, showApiMessage, errorMessage, disabled, imageProvider } =
-    props;
+  const {
+    formikProps: { values, setFieldValue },
+    apiStatus,
+    showApiMessage,
+    errorMessage,
+    disabled,
+    imageProvider,
+  } = props;
 
   const isApiKeyMode = values.auth_mode === "api_key";
 

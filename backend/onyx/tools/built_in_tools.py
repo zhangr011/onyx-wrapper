@@ -45,7 +45,9 @@ BUILT_IN_TOOL_MAP: dict[str, Type[BUILT_IN_TOOL_TYPES]] = {
     CodingAgentTool.__name__: CodingAgentTool,
 }
 
-STOPPING_TOOLS_NAMES: list[str] = [ImageGenerationTool.NAME]
+# Any tool whose name starts with this prefix should stop the LLM loop
+# (covers generate_image, generate_image_gpt_image_1, etc.)
+STOPPING_TOOL_NAME_PREFIX = ImageGenerationTool.NAME  # "generate_image"
 CITEABLE_TOOLS_NAMES: list[str] = [
     SearchTool.NAME,
     WebSearchTool.NAME,

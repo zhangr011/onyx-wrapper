@@ -1,4 +1,5 @@
 import json
+import re
 import threading
 from typing import Any
 from typing import cast
@@ -44,6 +45,23 @@ HEARTBEAT_INTERVAL = 5.0
 PROMPT_FIELD = "prompt"
 REFERENCE_IMAGE_FILE_IDS_FIELD = "reference_image_file_ids"
 
+# Base name shared by all image generation tool variants
+BASE_TOOL_NAME = "generate_image"
+
+
+def sanitize_model_name_for_tool(model_name: str) -> str:
+    """Convert a model name into a safe tool-name suffix.
+
+    e.g. "gpt-image-1" → "gpt_image_1", "gemini-2.5-flash" → "gemini_2_5_flash"
+    """
+    return re.sub(r"[^a-zA-Z0-9]", "_", model_name).strip("_")
+
+
+def build_model_label(model_name: str, provider: str) -> str:
+    """Build a short human-readable label for use in tool descriptions."""
+    # Use the model name directly; callers can override via explicit label if needed
+    return model_name
+
 
 class ImageGenerationTool(Tool[None]):
     NAME = "generate_image"
@@ -58,11 +76,17 @@ class ImageGenerationTool(Tool[None]):
         model: str = IMAGE_MODEL_NAME,
         provider: str = IMAGE_MODEL_PROVIDER,
         num_imgs: int = 1,
+        tool_name: str | None = None,
+        tool_description: str | None = None,
+        display_name: str | None = None,
     ) -> None:
         super().__init__(emitter=emitter)
         self.model = model
         self.provider = provider
         self.num_imgs = num_imgs
+        self._name = tool_name or self.NAME
+        self._description = tool_description or self.DESCRIPTION
+        self._display_name = display_name or self.DISPLAY_NAME
 
         self.img_provider = get_image_generation_provider(
             provider, image_generation_credentials
@@ -76,15 +100,15 @@ class ImageGenerationTool(Tool[None]):
 
     @property
     def name(self) -> str:
-        return self.NAME
+        return self._name
 
     @property
     def description(self) -> str:
-        return self.DESCRIPTION
+        return self._description
 
     @property
     def display_name(self) -> str:
-        return self.DISPLAY_NAME
+        return self._display_name
 
     @override
     @classmethod

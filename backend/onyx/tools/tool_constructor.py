@@ -21,7 +21,7 @@ from onyx.db.llm import can_user_access_llm_provider
 from onyx.db.llm import fetch_user_group_ids
 from onyx.db.models import Persona
 from onyx.db.models import User
-from onyx.db.image_generation import get_default_image_generation_config
+from onyx.db.image_generation import get_all_image_generation_configs_with_relations
 from onyx.db.oauth_config import get_oauth_config
 from onyx.db.search_settings import get_current_search_settings
 from onyx.db.tools import get_builtin_tool
@@ -43,6 +43,7 @@ from onyx.tools.tool_implementations.custom.custom_tool import (
 from onyx.tools.tool_implementations.file_reader.file_reader_tool import FileReaderTool
 from onyx.tools.tool_implementations.images.image_generation_tool import (
     ImageGenerationTool,
+    sanitize_model_name_for_tool,
 )
 from onyx.tools.tool_implementations.mcp.mcp_tool import MCPTool
 from onyx.tools.tool_implementations.memory.memory_tool import MemoryTool
@@ -244,72 +245,114 @@ def _construct_tools_impl(
 
             # Handle Image Generation Tool
             elif tool_cls.__name__ == ImageGenerationTool.__name__:
-                # Fetch the default image generation config
-                img_gen_config = get_default_image_generation_config(db_session)
-                if (
-                    not img_gen_config
-                    or not img_gen_config.model_configuration
-                    or not img_gen_config.model_configuration.llm_provider
-                ):
+                # Fetch ALL image generation configs (not just default)
+                all_img_gen_configs = get_all_image_generation_configs_with_relations(
+                    db_session
+                )
+                if not all_img_gen_configs:
                     logger.debug(
-                        "Skipping ImageGenerationTool: no default config found"
+                        "Skipping ImageGenerationTool: no configs found"
                     )
                     continue
 
-                # Check group-based access to the underlying LLM provider
-                llm_provider = img_gen_config.model_configuration.llm_provider
+                # Pre-compute user access info once
                 user_group_ids = fetch_user_group_ids(db_session, user)
                 is_admin = user.role == UserRole.ADMIN
 
-                if not can_user_access_llm_provider(
-                    provider=llm_provider,
-                    user_group_ids=user_group_ids,
-                    persona=persona,
-                    is_admin=is_admin,
-                ):
-                    logger.debug(
-                        "Skipping ImageGenerationTool: user '%s' lacks access "
-                        "to LLM provider '%s'",
-                        user.email,
-                        llm_provider.name,
+                # Build one tool per accessible config
+                image_tools: list[Tool] = []
+                for img_gen_config in all_img_gen_configs:
+                    if (
+                        not img_gen_config.model_configuration
+                        or not img_gen_config.model_configuration.llm_provider
+                    ):
+                        logger.debug(
+                            "Skipping image config '%s': missing model_configuration or llm_provider",
+                            img_gen_config.image_provider_id,
+                        )
+                        continue
+
+                    llm_provider = img_gen_config.model_configuration.llm_provider
+
+                    # Access control via the underlying LLMProvider
+                    if not can_user_access_llm_provider(
+                        provider=llm_provider,
+                        user_group_ids=user_group_ids,
+                        persona=persona,
+                        is_admin=is_admin,
+                    ):
+                        logger.debug(
+                            "Skipping image config '%s': user '%s' lacks access "
+                            "to LLM provider '%s'",
+                            img_gen_config.image_provider_id,
+                            user.email,
+                            llm_provider.name,
+                        )
+                        continue
+
+                    model_name = img_gen_config.model_configuration.name
+                    provider_type = llm_provider.provider
+                    sanitized = sanitize_model_name_for_tool(model_name)
+
+                    # Build dynamic tool name and description
+                    tool_name = f"generate_image_{sanitized}"
+
+                    # Determine display label
+                    model_config = img_gen_config.model_configuration
+                    model_label = (
+                        model_config.custom_display_name
+                        or model_config.display_name
+                        or model_config.name
                     )
-                    continue
 
-                # Build LLMConfig (same logic as _get_image_generation_config)
-                img_generation_llm_config = LLMConfig(
-                    model_provider=llm_provider.provider,
-                    model_name=img_gen_config.model_configuration.name,
-                    temperature=GEN_AI_TEMPERATURE,
-                    api_key=(
-                        llm_provider.api_key.get_value(apply_mask=False)
-                        if llm_provider.api_key
-                        else None
-                    ),
-                    api_base=llm_provider.api_base,
-                    api_version=llm_provider.api_version,
-                    deployment_name=llm_provider.deployment_name,
-                    max_input_tokens=llm.config.max_input_tokens,
-                    custom_config=llm_provider.custom_config,
-                )
+                    tool_description = (
+                        f"Generate an image using {model_label} ({provider_type}). "
+                        f"Use this tool when the user wants to create an image. "
+                        f"Do not use unless the user specifically requests an image."
+                    )
+                    display_name = f"Image Generation ({model_label})"
 
-                tool_dict[db_tool_model.id] = [
-                    ImageGenerationTool(
-                        image_generation_credentials=ImageGenerationProviderCredentials(
-                            api_key=cast(str, img_generation_llm_config.api_key),
-                            api_base=img_generation_llm_config.api_base,
-                            api_version=img_generation_llm_config.api_version,
-                            deployment_name=(
-                                img_generation_llm_config.deployment_name
-                                or img_generation_llm_config.model_name
-                            ),
-                            custom_config=img_generation_llm_config.custom_config,
+                    # Build credentials
+                    img_generation_llm_config = LLMConfig(
+                        model_provider=provider_type,
+                        model_name=model_name,
+                        temperature=GEN_AI_TEMPERATURE,
+                        api_key=(
+                            llm_provider.api_key.get_value(apply_mask=False)
+                            if llm_provider.api_key
+                            else None
                         ),
-                        provider=img_generation_llm_config.model_provider,
-                        model=img_generation_llm_config.model_name,
-                        tool_id=db_tool_model.id,
-                        emitter=emitter,
+                        api_base=llm_provider.api_base,
+                        api_version=llm_provider.api_version,
+                        deployment_name=llm_provider.deployment_name,
+                        max_input_tokens=llm.config.max_input_tokens,
+                        custom_config=llm_provider.custom_config,
                     )
-                ]
+
+                    image_tools.append(
+                        ImageGenerationTool(
+                            image_generation_credentials=ImageGenerationProviderCredentials(
+                                api_key=cast(str, img_generation_llm_config.api_key),
+                                api_base=img_generation_llm_config.api_base,
+                                api_version=img_generation_llm_config.api_version,
+                                deployment_name=(
+                                    img_generation_llm_config.deployment_name
+                                    or img_generation_llm_config.model_name
+                                ),
+                                custom_config=img_generation_llm_config.custom_config,
+                            ),
+                            provider=img_generation_llm_config.model_provider,
+                            model=img_generation_llm_config.model_name,
+                            tool_id=db_tool_model.id,
+                            emitter=emitter,
+                            tool_name=tool_name,
+                            tool_description=tool_description,
+                            display_name=display_name,
+                        )
+                    )
+
+                if image_tools:
+                    tool_dict[db_tool_model.id] = image_tools
 
             # Handle Web Search Tool
             elif tool_cls.__name__ == WebSearchTool.__name__:

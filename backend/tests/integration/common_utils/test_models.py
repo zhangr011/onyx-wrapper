@@ -202,6 +202,9 @@ class ToolName(str, Enum):
     IMAGE_GENERATION = "generate_image"
 
 
+IMAGE_GENERATION_TOOL_NAME_PREFIX = "generate_image"
+
+
 class ToolResult(BaseModel):
     tool_name: ToolName
 

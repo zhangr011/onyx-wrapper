@@ -54,7 +54,7 @@ from onyx.utils.threadpool_concurrency import run_functions_tuples_in_parallel
 from onyx.utils.timing import log_function_time
 
 logger = setup_logger()
-IMAGE_GENERATION_TOOL_NAME = "generate_image"
+IMAGE_GENERATION_TOOL_NAME_PREFIX = "generate_image"
 
 
 class FileContextResult(BaseModel):
@@ -578,7 +578,7 @@ def _build_tool_call_response_history_message(
     generated_images: list[dict] | None,
     tool_call_response: str | None,
 ) -> str:
-    if tool_name != IMAGE_GENERATION_TOOL_NAME:
+    if not tool_name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX):
         return TOOL_CALL_RESPONSE_CROSS_MESSAGE
 
     if generated_images:
@@ -774,7 +774,7 @@ def convert_chat_history(
                                 message=tool_response_message,
                                 token_count=(
                                     token_counter(tool_response_message)
-                                    if tool_name == IMAGE_GENERATION_TOOL_NAME
+                                    if tool_name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX)
                                     else 20
                                 ),
                                 message_type=MessageType.TOOL_CALL_RESPONSE,

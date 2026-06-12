@@ -16,6 +16,9 @@ from tests.integration.common_utils.test_models import DATestImageGenerationConf
 from tests.integration.common_utils.test_models import DATestLLMProvider
 from tests.integration.common_utils.test_models import DATestUser
 from tests.integration.common_utils.test_models import ToolName
+from tests.integration.common_utils.test_models import (
+    IMAGE_GENERATION_TOOL_NAME_PREFIX,
+)
 
 ART_PERSONA_ID = -3
 
@@ -52,7 +55,7 @@ def test_image_generation_streaming(
 
     # 1. Check if image generation tool was used
     image_gen_used = any(
-        tool.tool_name == ToolName.IMAGE_GENERATION
+        tool.tool_name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX)
         for tool in analyzed_response.used_tools
     )
     assert image_gen_used
@@ -78,7 +81,7 @@ def test_image_generation_streaming(
     image_tool_results = [
         tool
         for tool in analyzed_response.used_tools
-        if tool.tool_name == ToolName.IMAGE_GENERATION
+        if tool.tool_name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX)
     ]
     assert len(image_tool_results) > 0, "Should have image generation tool results"
 

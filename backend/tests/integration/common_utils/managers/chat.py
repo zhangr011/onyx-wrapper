@@ -25,6 +25,9 @@ from tests.integration.common_utils.test_models import StreamedResponse
 from tests.integration.common_utils.test_models import ToolCallDebug
 from tests.integration.common_utils.test_models import ToolName
 from tests.integration.common_utils.test_models import ToolResult
+from tests.integration.common_utils.test_models import (
+    IMAGE_GENERATION_TOOL_NAME_PREFIX,
+)
 
 
 class StreamPacketObj(TypedDict, total=False):
@@ -293,7 +296,7 @@ class ChatSessionManager:
                 elif packet_type_str == StreamingType.IMAGE_GENERATION_START.value:
                     ind_to_tool_use[ind] = (  # type: ignore
                         ToolResult(
-                            tool_name=ToolName.IMAGE_GENERATION,
+                            tool_name=IMAGE_GENERATION_TOOL_NAME_PREFIX,
                         )
                     )
                 elif packet_type_str == StreamingType.IMAGE_GENERATION_HEARTBEAT.value:

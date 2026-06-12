@@ -452,7 +452,7 @@ def test_image_generation_tool_no_reasoning(
         # The tool then emits: start, heartbeats (during image generation), final, and section end.
         handler.add_response(
             LLMToolCallResponse(
-                tool_name="generate_image",
+                tool_name="generate_image_gpt_image_1",
                 tool_call_id="123",
                 tool_call_argument_tokens=[json.dumps({"prompt": QUERY})],
             )

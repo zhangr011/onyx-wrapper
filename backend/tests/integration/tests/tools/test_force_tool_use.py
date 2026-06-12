@@ -12,6 +12,9 @@ from tests.integration.common_utils.managers.chat import ChatSessionManager
 from tests.integration.common_utils.test_models import DATestImageGenerationConfig
 from tests.integration.common_utils.test_models import DATestUser
 from tests.integration.common_utils.test_models import ToolName
+from tests.integration.common_utils.test_models import (
+    IMAGE_GENERATION_TOOL_NAME_PREFIX,
+)
 
 
 def test_force_tool_use(
@@ -42,7 +45,7 @@ def test_force_tool_use(
     assert analyzed_response.error is None, "Chat response should not have an error"
 
     image_generation_tool_used = any(
-        tool.tool_name == ToolName.IMAGE_GENERATION
+        tool.tool_name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX)
         for tool in analyzed_response.used_tools
     )
     assert image_generation_tool_used, (

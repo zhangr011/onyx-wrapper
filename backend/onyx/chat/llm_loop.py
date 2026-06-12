@@ -48,7 +48,7 @@ from onyx.server.query_and_chat.streaming_models import Packet
 from onyx.server.query_and_chat.streaming_models import ToolCallDebug
 from onyx.server.query_and_chat.streaming_models import TopLevelBranching
 from onyx.tools.built_in_tools import CITEABLE_TOOLS_NAMES
-from onyx.tools.built_in_tools import STOPPING_TOOLS_NAMES
+from onyx.tools.built_in_tools import STOPPING_TOOL_NAME_PREFIX
 from onyx.tools.interface import Tool
 from onyx.tools.models import ChatFile
 from onyx.tools.models import CustomToolCallSummary
@@ -1137,7 +1137,7 @@ def run_llm_loop(
 
             # Certain tools do not allow further actions, force the LLM wrap up on the next cycle
             if any(
-                tool.tool_name in STOPPING_TOOLS_NAMES
+                tool.tool_name.startswith(STOPPING_TOOL_NAME_PREFIX)
                 for tool in llm_step_result.tool_calls
             ):
                 ran_image_gen = True

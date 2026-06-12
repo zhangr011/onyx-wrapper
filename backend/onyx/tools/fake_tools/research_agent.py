@@ -762,7 +762,7 @@ if __name__ == "__main__":
             tool
             for tool_list in tool_dict.values()
             for tool in tool_list
-            if tool.name != "generate_image"
+            if not tool.name.startswith("generate_image")
         ]
 
         logger.info("Running research agent with prompt: %s", RESEARCH_PROMPT)

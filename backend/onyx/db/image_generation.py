@@ -61,6 +61,25 @@ def get_all_image_generation_configs(
     return list(db_session.scalars(stmt).all())
 
 
+def get_all_image_generation_configs_with_relations(
+    db_session: Session,
+) -> list[ImageGenerationConfig]:
+    """Get all image generation configs with model_configuration and llm_provider eager-loaded.
+
+    Returns:
+        List of all ImageGenerationConfig objects with relationships loaded.
+    """
+    stmt = (
+        select(ImageGenerationConfig)
+        .options(
+            selectinload(ImageGenerationConfig.model_configuration).selectinload(
+                ModelConfiguration.llm_provider
+            )
+        )
+    )
+    return list(db_session.scalars(stmt).all())
+
+
 def get_image_generation_config(
     db_session: Session,
     image_provider_id: str,

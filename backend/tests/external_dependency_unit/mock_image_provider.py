@@ -110,7 +110,29 @@ def _create_mock_image_generation_llm_config() -> LLMConfig:
 def use_mock_image_generation_provider() -> Generator[
     ImageGenerationProviderController, None, None
 ]:
+    from unittest.mock import MagicMock
+
     image_gen_provider = MockImageGenerationProvider()
+
+    # Create a mock ImageGenerationConfig with full relationship chain
+    mock_config = MagicMock()
+    mock_config.model_configuration = MagicMock()
+    mock_config.model_configuration.name = "gpt-image-1"
+    mock_config.model_configuration.custom_display_name = None
+    mock_config.model_configuration.display_name = None
+    mock_config.model_configuration.llm_provider = MagicMock()
+    mock_config.model_configuration.llm_provider.provider = "openai"
+    mock_config.model_configuration.llm_provider.api_key = MagicMock()
+    mock_config.model_configuration.llm_provider.api_key.get_value = MagicMock(
+        return_value="mock-api-key"
+    )
+    mock_config.model_configuration.llm_provider.api_base = None
+    mock_config.model_configuration.llm_provider.api_version = None
+    mock_config.model_configuration.llm_provider.deployment_name = None
+    mock_config.model_configuration.llm_provider.custom_config = None
+    mock_config.model_configuration.llm_provider.is_public = True
+    mock_config.model_configuration.llm_provider.groups = []
+    mock_config.model_configuration.llm_provider.personas = []
 
     with (
         # Mock the image generation provider factory
@@ -123,10 +145,10 @@ def use_mock_image_generation_provider() -> Generator[
             "onyx.tools.tool_implementations.images.image_generation_tool.ImageGenerationTool.is_available",
             return_value=True,
         ),
-        # Mock the config lookup in tool_constructor to return a valid LLMConfig
+        # Mock the config lookup in tool_constructor to return our mock configs
         patch(
-            "onyx.tools.tool_constructor._get_image_generation_config",
-            return_value=_create_mock_image_generation_llm_config(),
+            "onyx.tools.tool_constructor.get_all_image_generation_configs_with_relations",
+            return_value=[mock_config],
         ),
     ):
         yield image_gen_provider

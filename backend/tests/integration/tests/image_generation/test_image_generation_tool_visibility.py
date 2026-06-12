@@ -15,7 +15,7 @@ from tests.integration.common_utils.reset import reset_all
 from tests.integration.common_utils.test_models import DATestLLMProvider
 from tests.integration.common_utils.test_models import DATestUser
 
-IMAGE_GENERATION_TOOL_NAME = ImageGenerationTool.NAME
+IMAGE_GENERATION_TOOL_NAME_PREFIX = ImageGenerationTool.NAME
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +46,9 @@ def test_vertex_creds_upload_image_tool_visibility(
 
     # 1. Check the tools and check that image generation tool is not visible yet
     tools = ToolManager.list_tools(user_performing_action=admin_user)
-    assert not any(tool.name == IMAGE_GENERATION_TOOL_NAME for tool in tools)
+    assert not any(
+        tool.name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX) for tool in tools
+    )
 
     # 2. Upload vertex ai credentials
     config = ImageGenerationConfigManager.create(
@@ -72,4 +74,6 @@ def test_vertex_creds_upload_image_tool_visibility(
 
     # 3. Check that the tool is visible
     tools = ToolManager.list_tools(user_performing_action=admin_user)
-    assert any(tool.name == IMAGE_GENERATION_TOOL_NAME for tool in tools)
+    assert any(
+        tool.name.startswith(IMAGE_GENERATION_TOOL_NAME_PREFIX) for tool in tools
+    )
